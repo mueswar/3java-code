@@ -1,0 +1,2 @@
+https://edabit.com/challenges/java
+https://www.javastring.net/java/string/java-string-chars-method-examples
