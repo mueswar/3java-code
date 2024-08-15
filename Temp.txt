@@ -1,0 +1,143 @@
+plugins {
+    id 'org.springframework.boot' version '3.3.2'
+    id 'io.spring.dependency-management' version '1.1.0'
+    id 'java'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '17'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.security:spring-security-oauth2-client'
+    implementation 'org.springframework.security:spring-security-oauth2-jose'
+    implementation 'org.slf4j:slf4j-api'
+    implementation 'ch.qos.logback:logback-classic'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+
+
+
+
+  security:
+    oauth2:
+      client:
+        registration:
+          service2:
+            client-id: SERVICE2_CLIENT_ID
+            client-secret: SERVICE2_CLIENT_SECRET
+            authorization-grant-type: client_credentials
+            token-uri: https://pingfederate.example.com/as/token.oauth2
+            scope:
+              - read
+        provider:
+          service2:
+            token-uri: https://pingfederate.example.com/as/token.oauth2
+logging:
+  level:
+    root: INFO
+    org.springframework.web.reactive.function.client: DEBUG
+	
+	
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.client.web.reactive.function.client.ServerOAuth2AuthorizedClientExchangeFilterFunction;
+import org.springframework.security.oauth2.client.web.reactive.function.client.DefaultReactiveOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.web.reactive.function.client.ReactiveOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.web.reactive.function.client.OAuth2AuthorizedClientProvider;
+import org.springframework.security.oauth2.client.web.reactive.function.client.OAuth2AuthorizedClientProviderBuilder;
+import org.springframework.security.oauth2.client.web.reactive.function.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.web.reactive.function.client.InMemoryOAuth2AuthorizedClientService;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+@Configuration
+public class WebClientConfig {
+
+    @Bean
+    public WebClient.Builder webClientBuilder(ReactiveOAuth2AuthorizedClientManager authorizedClientManager) {
+        ServerOAuth2AuthorizedClientExchangeFilterFunction oauth2 = new ServerOAuth2AuthorizedClientExchangeFilterFunction(authorizedClientManager);
+        return WebClient.builder().filter(oauth2);
+    }
+
+    @Bean
+    public ReactiveOAuth2AuthorizedClientManager authorizedClientManager(OAuth2AuthorizedClientService authorizedClientService) {
+        OAuth2AuthorizedClientProvider authorizedClientProvider = OAuth2AuthorizedClientProviderBuilder.builder()
+            .clientCredentials()
+            .build();
+
+        DefaultReactiveOAuth2AuthorizedClientManager manager = new DefaultReactiveOAuth2AuthorizedClientManager(
+            authorizedClientService,
+            new InMemoryOAuth2AuthorizedClientService(authorizedClientService)
+        );
+
+        manager.setAuthorizedClientProvider(authorizedClientProvider);
+        return manager;
+    }
+}
+
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+@Configuration
+public class LoggingConfig {
+
+    private static final Logger logger = LoggerFactory.getLogger(LoggingConfig.class);
+
+    @Bean
+    public WebClient.Builder webClientBuilder() {
+        return WebClient.builder()
+            .filter((request, next) -> {
+                long start = System.currentTimeMillis();
+                logger.info("Request to {} with method {}", request.url(), request.method());
+                return next.exchange(request)
+                    .doOnNext(response -> logger.info("Response status: {} received in {} ms", response.statusCode(), System.currentTimeMillis() - start))
+                    .doOnError(error -> logger.error("Request failed", error));
+            });
+    }
+}
+
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+@Service
+public class MyService {
+
+    private static final Logger logger = LoggerFactory.getLogger(MyService.class);
+    private final WebClient webClient;
+
+    public MyService(WebClient.Builder webClientBuilder) {
+        this.webClient = webClientBuilder.baseUrl("https://service2-url.com").build();
+    }
+
+    public Mono<String> fetchDataFromService2() {
+        return webClient.get()
+                .uri("/data")
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnNext(response -> logger.info("Received response from Service2: {}", response))
+                .doOnError(error -> logger.error("Error calling Service2", error));
+    }
+}
