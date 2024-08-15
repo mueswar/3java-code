@@ -89,6 +89,48 @@ public class WebClientConfig {
     }
 }
 
+-----
+spring security 6
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.client.web.reactive.function.client.ServerOAuth2AuthorizedClientExchangeFilterFunction;
+import org.springframework.security.oauth2.client.web.reactive.function.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.web.reactive.function.client.OAuth2AuthorizedClientProvider;
+import org.springframework.security.oauth2.client.web.reactive.function.client.OAuth2AuthorizedClientProviderBuilder;
+import org.springframework.security.oauth2.client.web.reactive.function.client.OAuth2AuthorizedClientService;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@Configuration
+public class WebClientConfig {
+
+    @Bean
+    public WebClient.Builder webClientBuilder(OAuth2AuthorizedClientManager authorizedClientManager) {
+        ServerOAuth2AuthorizedClientExchangeFilterFunction oauth2 = new ServerOAuth2AuthorizedClientExchangeFilterFunction(authorizedClientManager);
+        return WebClient.builder()
+            .filter(oauth2);
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientManager authorizedClientManager(OAuth2AuthorizedClientService authorizedClientService) {
+        OAuth2AuthorizedClientProvider authorizedClientProvider = OAuth2AuthorizedClientProviderBuilder.builder()
+            .clientCredentials()
+            .build();
+
+        return new OAuth2AuthorizedClientManager() {
+            @Override
+            public OAuth2AuthorizedClientService getAuthorizedClientService() {
+                return authorizedClientService;
+            }
+
+            @Override
+            public OAuth2AuthorizedClientProvider getAuthorizedClientProvider() {
+                return authorizedClientProvider;
+            }
+        };
+    }
+}
+
+
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
