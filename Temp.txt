@@ -172,3 +172,56 @@ public class MyService {
                 .doOnError(error -> logger.error("Error calling Service2", error));
     }
 }
+
+
+
+-----------------------------------
+import javax.net.ssl.X509TrustManager;
+import java.security.cert.X509Certificate;
+
+public class TrustAllTrustManager implements X509TrustManager {
+    @Override
+    public void checkClientTrusted(X509Certificate[] chain, String authType) {
+    }
+
+    @Override
+    public void checkServerTrusted(X509Certificate[] chain, String authType) {
+    }
+
+    @Override
+    public X509Certificate[] getAcceptedIssuers() {
+        return new X509Certificate[0];
+    }
+}
+
+
+import org.springframework.boot.web.reactive.function.client.WebClientBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+
+@Configuration
+public class WebClientConfig {
+
+    @Bean
+    public WebClient webClient() throws Exception {
+        TrustManager[] trustAllCerts = new TrustManager[]{
+            new TrustAllTrustManager()
+        };
+
+        SSLContext sslContext = SSLContext.getInstance("SSL");
+        sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(
+                        HttpClient.create()
+                                .secure(ssl -> ssl.sslContext(SslContextBuilder.forClient()
+                                        .trustManager(sslContext.getSocketFactory())))))
+                .build();
+    }
+}
+
